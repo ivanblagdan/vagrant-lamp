@@ -1,0 +1,9 @@
+[submodule "src/php-build"]
+	path = src/php-build
+	url = git://github.com/CHH/php-build.git
+[submodule "src/phpenv"]
+	path = src/phpenv
+	url = git://github.com/CHH/phpenv.git
+[submodule "src/rbenv"]
+	path = src/rbenv
+	url = git://github.com/sstephenson/rbenv.git

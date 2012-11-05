@@ -1,27 +1,29 @@
-require_recipe "apt"
-require_recipe "apache2"
-require_recipe "mysql::server"
-require_recipe "php::php5"
+include_recipe "apache2"
 
-# Some neat package (subversion is needed for "subversion" chef ressource)
-%w{ debconf php5-xdebug subversion  }.each do |a_package|
-  package a_package
+include_recipe "apt"
+
+include_recipe "git"
+include_recipe "subversion"
+
+pkgs = value_for_platform(
+    ["centos","redhat","fedora"] =>
+        {"default" => %w{ bzip2-devel libc-client-devel curl-devel freetype-devel gmp-devel libjpeg-devel krb5-devel libmcrypt-devel libpng-devel openssl-devel t1lib-devel mhash-devel libxml2-dev libtidy-dev libxslt1-dev re2c lemon wget}},
+    [ "debian", "ubuntu" ] =>
+        {"default" => %w{ libbz2-dev libc-client2007e-dev libcurl4-gnutls-dev libfreetype6-dev libgmp3-dev libjpeg62-dev libkrb5-dev libmcrypt-dev libpng12-dev libssl-dev libt1-dev libxml2-dev libtidy-dev libxslt1-dev re2c lemon wget}},
+    "default" => %w{ libbz2-dev libc-client2007e-dev libcurl4-gnutls-dev libfreetype6-dev libgmp3-dev libjpeg62-dev libkrb5-dev libmcrypt-dev libpng12-dev libssl-dev libt1-dev libxml2-dev libtidy-dev libxslt1-dev re2c lemon wget}
+  )
+
+pkgs.each do |pkg|
+  package pkg do
+    action :install
+  end
 end
 
-# get phpmyadmin conf
-cookbook_file "/tmp/phpmyadmin.deb.conf" do
-  source "phpmyadmin.deb.conf"
-end
-bash "debconf_for_phpmyadmin" do
-  code "debconf-set-selections /tmp/phpmyadmin.deb.conf"
-end
-package "phpmyadmin"
-
-s = "dev-site"
+site_name = "dev-site"
 site = {
-  :name => s, 
-  :host => "www.#{s}.com", 
-  :aliases => ["#{s}.com", "dev.#{s}-static.com"]
+  :name => site_name,
+  :host => "www.#{site_name}.com",
+  :aliases => ["#{site_name}.com", "dev.#{site_name}-static.com"]
 }
 
 # Configure the development site
@@ -30,11 +32,33 @@ web_app site[:name] do
   server_name site[:host]
   server_aliases site[:aliases]
   docroot "/vagrant/public/"
-end  
+end
 
 # Add site info in /etc/hosts
 bash "info_in_etc_hosts" do
   code "echo 127.0.0.1 #{site[:host]} #{site[:aliases]} >> /etc/hosts"
+end
+
+#install php env
+bash "install_phpenv" do
+  user "vagrant"
+  cwd "/vagrant/src/phpenv/bin"
+  code <<-EOH
+  PHPENV_ROOT=/home/vagrant/.phpenv CHECKOUT=yes ./phpenv-install.sh
+  echo PATH=/home/vagrant/.phpenv/bin:$PATH >> /home/vagrant/.profile
+  EOH
+end
+
+#install bats
+bash "install_bats" do
+  user "vagrant"
+  cwd "/vagrant/src"
+  code <<-EOH
+  git clone http://github.com/sstephenson/bats
+  cd bats
+  ./install.sh /usr/local
+  exit 0
+  EOH
 end
 
 # Retrieve webgrind for xdebug trace analysis
@@ -43,17 +67,4 @@ subversion "Webgrind" do
   revision "HEAD"
   destination "/var/www/webgrind"
   action :sync
-end
-
-# Add an admin user to mysql
-execute "add-admin-user" do
-  command "/usr/bin/mysql -u root -p#{node[:mysql][:server_root_password]} -e \"" +
-      "CREATE USER 'myadmin'@'localhost' IDENTIFIED BY 'myadmin';" +
-      "GRANT ALL PRIVILEGES ON *.* TO 'myadmin'@'localhost' WITH GRANT OPTION;" +
-      "CREATE USER 'myadmin'@'%' IDENTIFIED BY 'myadmin';" +
-      "GRANT ALL PRIVILEGES ON *.* TO 'myadmin'@'%' WITH GRANT OPTION;\" " +
-      "mysql"
-  action :run
-  only_if { `/usr/bin/mysql -u root -p#{node[:mysql][:server_root_password]} -D mysql -r -N -e \"SELECT COUNT(*) FROM user where user='myadmin' and host='localhost'"`.to_i == 0 }
-  ignore_failure true
 end
