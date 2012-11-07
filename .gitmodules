@@ -7,3 +7,6 @@
 [submodule "src/rbenv"]
 	path = src/rbenv
 	url = git://github.com/sstephenson/rbenv.git
+[submodule "src/bats"]
+	path = src/bats
+	url = https://github.com/sstephenson/bats
